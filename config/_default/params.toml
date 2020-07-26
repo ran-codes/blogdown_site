@@ -8,12 +8,12 @@
 ############################
 ## Theme
 ############################
-
-# Choose a theme.
+ 
+# Choose a theme.  
 #   Latest themes (may require updating): https://sourcethemes.com/academic/themes/
 #   Browse built-in themes in `themes/academic/data/themes/`
 #   Browse user installed themes in `data/themes/`
-theme = "minimal"
+theme = "ocean" 
 
 # Enable users to switch between day and night mode?
 day_night = true
@@ -31,7 +31,7 @@ font_size = "L"
 ############################
 ## Basic Info
 ############################
-
+ 
 # Website type
 #   Improve how search engines understand your site.
 #   For personal sites, choose "Person".
@@ -181,7 +181,7 @@ plugins_js  = []
 # An avatar can be uploaded as an image named `avatar` to each user's profile or fetched from Gravatar.com.
 [avatar]
   # Get user avatars from Gravatar.com? (true/false)
-  gravatar = false
+  gravatar = false 
 
   # Choose a shape for avatar images. Options: circle, square.
   shape = "circle"
