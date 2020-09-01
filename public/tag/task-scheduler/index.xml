@@ -1,0 +1,193 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Task Scheduler | Ran Li</title>
+    <link>/tag/task-scheduler/</link>
+      <atom:link href="/tag/task-scheduler/index.xml" rel="self" type="application/rss+xml" />
+    <description>Task Scheduler</description>
+    <generator>Source Themes Academic (https://sourcethemes.com/academic/)</generator><language>en-us</language><lastBuildDate>Tue, 01 Sep 2020 00:00:00 +0000</lastBuildDate>
+    <image>
+      <url>/images/icon_hu0b7a4cb9992c9ac0e91bd28ffd38dd00_9727_512x512_fill_lanczos_center_2.png</url>
+      <title>Task Scheduler</title>
+      <link>/tag/task-scheduler/</link>
+    </image>
+    
+    <item>
+      <title>Automating Task Scheduling in R</title>
+      <link>/post/automating-task-scheduling-in-r/</link>
+      <pubDate>Tue, 01 Sep 2020 00:00:00 +0000</pubDate>
+      <guid>/post/automating-task-scheduling-in-r/</guid>
+      <description>
+
+
+&lt;p&gt;I recently started a data project which required me somehow schedule an R script that cleaned data for a shiny app to be run daily. This post will go over how to use taskscheduleR package to run an R script daily and to create an update log to track updates.&lt;/p&gt;
+&lt;div id=&#34;requirements&#34; class=&#34;section level5&#34;&gt;
+&lt;h5&gt;Requirements:&lt;/h5&gt;
+&lt;ul&gt;
+&lt;li&gt;Rstudio&lt;/li&gt;
+&lt;li&gt;taskscheduleR package installed&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;div id=&#34;optional&#34; class=&#34;section level5&#34;&gt;
+&lt;h5&gt;Optional&lt;/h5&gt;
+&lt;p&gt;Ideally, daily updates should be done in a version control setting. This helps if something breaks and you need to roll back to a previous version.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Git Installed&lt;/li&gt;
+&lt;li&gt;Github Account&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/div&gt;
+&lt;div id=&#34;file-setup&#34; class=&#34;section level5&#34;&gt;
+&lt;h5&gt;File Setup&lt;/h5&gt;
+&lt;p&gt;I configured my directories in the format below.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;.
++--- Data/
+|   +--- data_updater.R
+|   +--- git_code.R
++--- Clean/
+|   +--- cleaned_data.R
+|   +--- cleaned_data.csv
+|   +--- update_log.csv  &lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;I have two folders in my root directory. The &lt;em&gt;Data/&lt;/em&gt; folder contains the R script that is run daily (&lt;em&gt;data_updater.R&lt;/em&gt;) as well as my helper script (&lt;em&gt;git_code.R&lt;/em&gt;). The &lt;em&gt;Clean/&lt;/em&gt; folder contains the cleaned data that is updated daily (&lt;em&gt;cleaned_data.R&lt;/em&gt; and &lt;em&gt;cleaned_data.csv&lt;/em&gt;) as well as my log which tracks my updates over time (&lt;em&gt;update_log.csv&lt;/em&gt;).&lt;/p&gt;
+&lt;p&gt;Let’s go over the code in the R script to be run daily before we get to using taskscheduleR to schedule this task daily.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div id=&#34;daily-script-data_updater.r&#34; class=&#34;section level3&#34;&gt;
+&lt;h3&gt;1. Daily Script: data_updater.R&lt;/h3&gt;
+&lt;p&gt;There are two parts to our updater script. The first part is a function (&lt;em&gt;data_updater_function&lt;/em&gt;) I wrote to update the data; the second part is a call of this function (&lt;em&gt;data_updater_function()&lt;/em&gt;).The reason why I functionalize the update is if for some reason there is a bug in the update process (for example the external data that you are pulling changes) the update process will not complete.&lt;/p&gt;
+&lt;p&gt;The full code is shown below. We will go through each section later on.&lt;/p&gt;
+&lt;pre class=&#34;r&#34;&gt;&lt;code&gt;data_updater_function = function(){
+  ## 1. Set up
+  setwd(&amp;quot;C:/Users/ranli/Desktop/Git local/example_taskscheduleR/Data&amp;quot;)
+  rm(list = ls())
+  library(data.table)
+  library(tidyverse)
+  
+  ## 2. Clean data
+  covid_cases_url =&amp;quot;https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_US.csv&amp;quot;
+  cleaned_data = fread(covid_cases_url) %&amp;gt;% 
+    as_tibble() %&amp;gt;% 
+    select(fips = FIPS, name = Admin2, contains(&amp;quot;/&amp;quot;)) %&amp;gt;% 
+    pivot_longer(cols = -c(fips, name), 
+                 names_to = &amp;#39;date&amp;#39;, 
+                 values_to = &amp;quot;cumulative_covid_cases&amp;quot;)
+  
+  ## 3. Save data
+  fwrite(cleaned_data, &amp;quot;../Clean/cleaned_data.csv&amp;quot;)
+  save(cleaned_data, file = &amp;quot;../Clean/cleaned_data.R&amp;quot; ) 
+  
+  ## 4. Update log 
+  # new_log = tibble(time =as.character(Sys.time()),action = &amp;quot;Started Log&amp;quot; )
+  # fwrite(new_log, &amp;quot;../Clean/update_log.csv&amp;quot;)
+  old_log = fread(&amp;quot;../Clean/update_log.csv&amp;quot;) %&amp;gt;% as_tibble() 
+  new_entry = tibble(time =as.character(Sys.time()),action = &amp;quot;Automatic update&amp;quot; )
+  list(old_log, new_entry) %&amp;gt;% 
+    bind_rows() %&amp;gt;% 
+    fwrite(&amp;quot;../Clean/update_log.csv&amp;quot;)
+  
+  ## 5. Push to Git Repo
+  source(&amp;quot;git_code.R&amp;quot;, local = T)
+  git2r::config(user.name = &amp;quot;rl627&amp;quot;,user.email = &amp;quot;rl627@drexel.edu&amp;quot;)
+  git2r::config()
+  gitstatus()
+  gitadd()
+  gitcommit()
+  gitpush()
+}
+
+## 6. Call Function
+data_updater_function()&lt;/code&gt;&lt;/pre&gt;
+&lt;div id=&#34;set-up&#34; class=&#34;section level4&#34;&gt;
+&lt;h4&gt;1.1 Set up&lt;/h4&gt;
+&lt;pre class=&#34;r&#34;&gt;&lt;code&gt;## 1. Set up
+setwd(&amp;quot;C:/Users/ranli/Desktop/Git local/example_taskscheduleR/Data&amp;quot;)
+rm(list = ls())
+library(data.table)
+library(tidyverse)&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;We set our working directory, clear our environment, and call two libraries. Data.table for fast reading/writing and tidyverse for data management tools.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div id=&#34;set-up-1&#34; class=&#34;section level4&#34;&gt;
+&lt;h4&gt;1.2 Set up&lt;/h4&gt;
+&lt;pre class=&#34;r&#34;&gt;&lt;code&gt;## 2. Clean data
+covid_cases_url =&amp;quot;https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_US.csv&amp;quot;
+cleaned_data = fread(covid_cases_url) %&amp;gt;% 
+  as_tibble() %&amp;gt;% 
+  select(fips = FIPS, name = Admin2, contains(&amp;quot;/&amp;quot;)) %&amp;gt;% 
+  pivot_longer(cols = -c(fips, name), 
+               names_to = &amp;#39;date&amp;#39;, 
+               values_to = &amp;quot;cumulative_covid_cases&amp;quot;)&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Here is the actual data cleaning. In this example, we are pulling COVID-19 cases in US counties from the JHU’s Github repo then transposing the data to long form. The object &lt;em&gt;cleaned_data&lt;/em&gt; will be the final product. In most cases, this cleaning process is the most complex part and is often useful to source this to another (or several other) R scripts.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div id=&#34;save-data&#34; class=&#34;section level4&#34;&gt;
+&lt;h4&gt;1.3 Save Data&lt;/h4&gt;
+&lt;pre class=&#34;r&#34;&gt;&lt;code&gt;## 3. Save data
+fwrite(cleaned_data, &amp;quot;../Clean/cleaned_data.csv&amp;quot;)
+save(cleaned_data, file = &amp;quot;../Clean/cleaned_data.R&amp;quot; ) &lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Now that we have cleaned data, we can save the data into our &lt;em&gt;Clean/&lt;/em&gt; folder. Here we save our final product in both Rdata as well as CSV format.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div id=&#34;update-log&#34; class=&#34;section level4&#34;&gt;
+&lt;h4&gt;1.4 Update Log&lt;/h4&gt;
+&lt;pre class=&#34;r&#34;&gt;&lt;code&gt;## 4. Update log 
+# new_log = tibble(time =as.character(Sys.time()),action = &amp;quot;Started Log&amp;quot; )
+# fwrite(new_log, &amp;quot;../Clean/update_log.csv&amp;quot;)
+old_log = fread(&amp;quot;../Clean/update_log.csv&amp;quot;) %&amp;gt;% as_tibble() 
+new_entry = tibble(time =as.character(Sys.time()),action = &amp;quot;Automatic update&amp;quot; )
+list(old_log, new_entry) %&amp;gt;% 
+  bind_rows() %&amp;gt;% 
+  fwrite(&amp;quot;../Clean/update_log.csv&amp;quot;)&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Sometimes it is useful to create an update log so that you or the user can track when the updates have been taking place. The first two lines of commented out code initialize a CSV file with two columns: time and action. This runs once to create the initial log then every time the update is called we append a new row with time and action. This log is saved into our &lt;em&gt;Clean/&lt;/em&gt; folder.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div id=&#34;push-to-git-repo&#34; class=&#34;section level4&#34;&gt;
+&lt;h4&gt;1.5 Push to Git Repo&lt;/h4&gt;
+&lt;p&gt;This step again is optional, but making data available online to apps to access is often useful. Here we assume that the local directory is stored in a local Git repository which is connected to Git online. The running the following code will automatically push your files to your Git Repo. Note, if the update process fails then the function will end and the push will not actually take place.&lt;/p&gt;
+&lt;pre class=&#34;r&#34;&gt;&lt;code&gt;## 5. Push to Git Repo 
+ source(&amp;quot;git_code.R&amp;quot;, local = T)
+  git2r::config(user.name = &amp;quot;rl627&amp;quot;,user.email = &amp;quot;rl627@drexel.edu&amp;quot;)
+  git2r::config()
+  gitstatus()
+  gitadd()
+  gitcommit()
+  gitpush()&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;If you are interested in seeing the &lt;em&gt;git_code.R&lt;/em&gt; you can explore the example repo online &lt;a href=&#34;https://github.com/rl627/example_taskscheduleR&#34;&gt;here&lt;/a&gt;.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div id=&#34;push-to-git-repo-1&#34; class=&#34;section level4&#34;&gt;
+&lt;h4&gt;1.6 Push to Git Repo&lt;/h4&gt;
+&lt;pre class=&#34;r&#34;&gt;&lt;code&gt;## 6. Call Function
+data_updater_function()&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Last step is just to call our function!&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+&lt;div id=&#34;using-taskscheduler&#34; class=&#34;section level3&#34;&gt;
+&lt;h3&gt;2. Using taskscheduleR&lt;/h3&gt;
+&lt;p&gt;&lt;a href=&#34;https://cran.r-project.org/web/packages/taskscheduleR/readme/README.html&#34;&gt;taskscheduleR&lt;/a&gt; schedules R scripts/processes with the Windows task scheduler. This allows R users working on Windows to automate R processes on specific timepoints from R itself.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Three things that you must be aware of: &lt;/strong&gt;&lt;/p&gt;
+&lt;ol style=&#34;list-style-type: decimal&#34;&gt;
+&lt;li&gt;taskscheduleR only works on Windows&lt;/li&gt;
+&lt;li&gt;Tasks only run if the PC is logged in. So it may be useful to set a work PC that never logs off.&lt;/li&gt;
+&lt;li&gt;Task scheduling only works if Rstudio is opened with “Run as Administrator”&lt;/li&gt;
+&lt;/ol&gt;
+&lt;div class=&#34;line-block&#34;&gt;If you have these satisfied and your directories and R scripts then we can start scheduling the scripts to run automatically.&lt;/div&gt;
+&lt;div id=&#34;first-step-open-rstudio-with-run-as-administrator&#34; class=&#34;section level4&#34;&gt;
+&lt;h4&gt;2.1 First step: Open Rstudio with “Run as Administrator”&lt;/h4&gt;
+&lt;p&gt;&lt;img src=&#34;/post/2020-09-01-automating-task-scheduling-in-r.en_files/run_admin_pic.png&#34; width=&#34;500&#34; height=&#34;500&#34; /&gt;&lt;/p&gt;
+&lt;p&gt;When Windows ask you to give Rstudio access, click yes.&lt;/p&gt;
+&lt;/div&gt;
+&lt;div id=&#34;second-step-use-the-taskscheduler-rstudio-addin-to-schedule-task&#34; class=&#34;section level4&#34;&gt;
+&lt;h4&gt;2.2 Second step: Use the taskscheduleR Rstudio Addin to schedule task&lt;/h4&gt;
+&lt;p&gt;Click the Addins drop down and search for taskscheduler.
+&lt;img src=&#34;/post/2020-09-01-automating-task-scheduling-in-r.en_files/step2.png&#34; width=&#34;500&#34; height=&#34;500&#34; /&gt;&lt;/p&gt;
+&lt;p&gt;Click “Schedule R scripts on Windows”. And you should see the following popup&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;/post/2020-09-01-automating-task-scheduling-in-r.en_files/step3.png&#34; width=&#34;500&#34; height=&#34;500&#34; /&gt;&lt;/p&gt;
+&lt;p&gt;Then First Click “Browse…” to select our R script (&lt;em&gt;data_updater.R&lt;/em&gt;)&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;/post/2020-09-01-automating-task-scheduling-in-r.en_files/step4.png&#34; width=&#34;500&#34; height=&#34;500&#34; /&gt;&lt;/p&gt;
+&lt;p&gt;Next, we will out the require parameters: schedule regularity, start date, start time and &lt;strong&gt;Date format of your local PC (IMPORTANT!).&lt;/strong&gt; Here we schedule a daily update to occur at 7:00 AM.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;/post/2020-09-01-automating-task-scheduling-in-r.en_files/step5.png&#34; width=&#34;500&#34; height=&#34;500&#34; /&gt;&lt;/p&gt;
+&lt;p&gt;Once you have double-checked your settings, click “Create task”. In the Rstudio console, you should see a function call and some red test as shown below.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;/post/2020-09-01-automating-task-scheduling-in-r.en_files/step6.png&#34; width=&#34;500&#34; height=&#34;500&#34; /&gt;&lt;/p&gt;
+&lt;p&gt;If there is an Error then “ERROR:….” will be in this red text. If you don’t see it then you should be good to go. You can check the update log after the scheulde task to see if it has worked.&lt;/p&gt;
+&lt;p&gt;A fully reproducible version of this example can be found at the example repo online &lt;a href=&#34;https://github.com/rl627/example_taskscheduleR&#34;&gt;here&lt;/a&gt;.&lt;/p&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+</description>
+    </item>
+    
+  </channel>
+</rss>

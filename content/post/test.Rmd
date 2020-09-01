@@ -1,0 +1,25 @@
+---
+title: "Untitled"
+author: "Ran Li"
+date: "7/27/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(highcharter)
+```
+
+## TEST RMarkdown
+
+
+test
+```{r}
+
+dfa = mtcars %>% as_tibble()
+
+highchart() %>% 
+  hc_add_series(data = dfa$mpg,type = "column")
+```
+

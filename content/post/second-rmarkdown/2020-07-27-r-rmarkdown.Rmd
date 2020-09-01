@@ -1,0 +1,25 @@
+---
+title: "Second Rmarkdown"
+author: "Frida Gomam"
+date: 2015-07-23T21:13:14-05:00
+categories: ["R"]
+tags: ["R Markdown", "plot", "regression"]
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(collapse = TRUE)
+library(tidyverse)
+library(highcharter)
+```
+
+# R Markdown
+Testing a plot
+
+```{r}
+
+dfa = mtcars %>% as_tibble()
+
+highchart() %>% 
+  hc_add_series(data = dfa$mpg,type = "column")
+```
+
